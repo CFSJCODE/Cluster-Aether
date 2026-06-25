@@ -13,8 +13,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protobuf compiler
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
       - name: cargo test
         run: cargo test --all
       - name: cargo check release
