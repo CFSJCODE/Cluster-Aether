@@ -15,6 +15,9 @@ message TaskRequest {
   string task_id = 1;
   string command = 2;
   bytes payload = 3;
+  uint32 timeout_seconds = 4;
+  repeated string required_tags = 5;
+  int32 priority = 6;
 }
 
 message TaskResponse {
@@ -30,6 +33,12 @@ message HeartbeatRequest {
   float ram_usage = 3;
   float temperature = 4;
   uint32 worker_port = 5;
+  string operating_system = 6;
+  uint32 running_tasks = 7;
+  uint32 max_concurrent_tasks = 8;
+  float load_average = 9;
+  repeated string tags = 10;
+  string shell = 11;
 }
 
 message HeartbeatResponse {
