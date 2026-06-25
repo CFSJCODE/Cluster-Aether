@@ -68,6 +68,15 @@ cargo build --release
 
 ## Execução local
 
+Você pode manter a configuração em TOML e sobrescrever valores pontuais pela CLI:
+
+```bash
+./target/release/aether --mode master --config config/aether.master.example.toml
+./target/release/aether --mode worker --config config/aether.worker.example.toml --worker-id worker-lab-01
+```
+
+Os exemplos em `config/` definem portas, tags, limites de concorrência e política de comandos.
+
 ### Master com Aether Console
 
 ```bash

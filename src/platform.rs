@@ -2,6 +2,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub enum ShellKind {
     Sh,
     PowerShell,

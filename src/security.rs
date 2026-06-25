@@ -36,6 +36,7 @@ impl Default for CommandPolicy {
                 "ping".into(),
                 "whoami".into(),
                 "date".into(),
+                "get-date".into(),
             ],
             denied_fragments: vec![
                 "rm -rf".into(),
@@ -75,16 +76,36 @@ impl CommandPolicy {
             return Ok(());
         }
 
-        if self
-            .allowed_prefixes
-            .iter()
-            .any(|prefix| lower.starts_with(&prefix.to_lowercase()))
-        {
+        if command_segments(command).all(|segment| self.segment_is_allowed(segment)) {
             return Ok(());
         }
 
         Err(CommandPolicyError::Denied(command.to_string()))
     }
+
+    fn segment_is_allowed(&self, segment: &str) -> bool {
+        let segment = segment.trim().to_lowercase();
+        if segment.is_empty() {
+            return true;
+        }
+
+        self.allowed_prefixes.iter().any(|prefix| {
+            let prefix = prefix.trim().to_lowercase();
+            !prefix.is_empty()
+                && (segment == prefix
+                    || segment
+                        .strip_prefix(&prefix)
+                        .is_some_and(|rest| rest.starts_with(char::is_whitespace)))
+        })
+    }
+}
+
+fn command_segments(command: &str) -> impl Iterator<Item = &str> {
+    command
+        .split('\n')
+        .flat_map(|line| line.split(';'))
+        .flat_map(|segment| segment.split("&&"))
+        .flat_map(|segment| segment.split("||"))
 }
 
 #[cfg(unix)]
@@ -108,6 +129,12 @@ mod tests {
     }
 
     #[test]
+    fn accepts_safe_powershell_segments() {
+        let policy = CommandPolicy::default();
+        assert!(policy.validate("hostname; whoami; Get-Date").is_ok());
+    }
+
+    #[test]
     fn denies_unknown_commands_by_default() {
         let policy = CommandPolicy::default();
         assert!(policy.validate("cat /etc/passwd").is_err());
@@ -115,8 +142,31 @@ mod tests {
 
     #[test]
     fn denies_dangerous_fragments_even_when_unsafe_mode_is_enabled() {
-        let mut policy = CommandPolicy::default();
-        policy.allow_unsafe_commands = true;
+        let policy = CommandPolicy {
+            allow_unsafe_commands: true,
+            ..CommandPolicy::default()
+        };
         assert!(policy.validate("rm -rf /tmp/aether-test").is_err());
+    }
+
+    #[test]
+    fn denies_unknown_commands_after_safe_segments() {
+        let policy = CommandPolicy::default();
+        assert!(policy.validate("hostname && cat /etc/passwd").is_err());
+    }
+
+    #[test]
+    fn denies_prefix_smuggling() {
+        let policy = CommandPolicy::default();
+        assert!(policy.validate("hostnameevil").is_err());
+    }
+
+    #[test]
+    fn empty_allowed_prefix_does_not_allow_everything() {
+        let policy = CommandPolicy {
+            allowed_prefixes: vec![String::new()],
+            ..CommandPolicy::default()
+        };
+        assert!(policy.validate("hostname").is_err());
     }
 }
