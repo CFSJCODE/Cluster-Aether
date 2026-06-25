@@ -4,20 +4,38 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# O motor assíncrono para aguentar milhares de pings de rede ao mesmo tempo
+# Runtime assíncrono para operações concorrentes de rede, processos e telemetria.
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 
-# A nossa stack gRPC ultra rápida
+# Stack gRPC e Protobuf.
 tonic = "0.11"
-prost = "0.12" # Engine do Protocol Buffers usada pelo tonic
+prost = "0.12"
 
-# Para ler métricas do sistema (CPU/RAM/Temperatura) sem sofrer
+# Telemetria local de CPU, RAM e sensores térmicos.
 sysinfo = "0.30"
 
-# Linha de comando elegante para passar as flags --mode master/worker
-clap = { version = "4.4", features = ["derive"] }
+# CLI, configuração e serialização.
+clap = { version = "4.4", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+uuid = { version = "1.8", features = ["v4"] }
+
+# Web Control Plane.
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors"] }
+
+# Diagnóstico, erros e logs estruturados.
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Proteção contra execução privilegiada em hosts Unix/Linux.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
-# Compilador de arquivos .proto para gerar código Rust em tempo de build
+# Compilador de arquivos .proto para gerar código Rust em tempo de build.
 tonic-build = "0.11"

@@ -1,0 +1,23 @@
+[Unit]
+Description=Aether Local Worker Node
+After=aether-master.service
+Requires=aether-master.service
+
+[Service]
+Type=simple
+User=aether
+Group=aether
+WorkingDirectory=/opt/aether
+ExecStart=/opt/aether/bin/aether --mode worker --worker-id ryzen-local --master-ip 127.0.0.1 --port 50051 --worker-port 50052 --max-concurrent-tasks 4 --tags local,ryzen,high-performance,linux
+Restart=on-failure
+RestartSec=3
+CPUQuota=650%
+CPUWeight=500
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

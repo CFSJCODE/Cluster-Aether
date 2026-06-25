@@ -1,77 +1,164 @@
 # Aether: High-Performance Distributed Systems Core
 
-O Aether é um runtime de orquestração e computação distribuída de baixa latência escrito em Rust. O sistema utiliza Protocol Buffers (Protobuf) sobre transporte gRPC (HTTP/2 Multiplexed) para estabelecer um protocolo de comunicação fortemente tipado, assíncrono e de alto alinhamento de memória entre os nós do cluster (Master/Workers).
+O Aether é um runtime de orquestração e computação distribuída de baixa latência escrito em Rust. O sistema usa Protocol Buffers sobre transporte gRPC/HTTP2 para definir contratos fortemente tipados entre nós Master, Workers e Clients.
 
-Projetado para ambientes de infraestrutura crítica, o Aether elimina o overhead de Garbage Collection e garante determinismo na gerência de recursos através do modelo de ownership do Rust, operando com consumo de memória previsível e saturação de I/O eficiente.
+Esta versão evolui o protótipo inicial para uma base operacional mais segura, com identificação explícita de Workers, política de comandos, telemetria ampliada, scheduler com consciência de capacidade, suporte multiplataforma inicial e uma interface web de controle chamada **Aether Console**.
 
 ---
 
-## System Architecture & Codegen Pipeline
+## Arquitetura
 
-A integridade das interfaces de rede do cluster é garantida em tempo de compilação. O script de automação do Cargo (build.rs) intercepta o pipeline de build para compilar as definições agnósticas de IDL (.proto) usando geradores de código altamente otimizados (prost / tonic-build).
+```text
+Client CLI / Aether Console
+        │ InjectTask
+        ▼
+Aether Master ── Scheduler ──► Workers
+   │                           │
+   ├── gRPC :50051              ├── WorkerService :50052+
+   └── Web UI :8080             └── shell controlado por política
+```
 
+## Principais capacidades
 
-graph TD
-    subgraph "Compile-Time (Source & Codegen)"
-        IDL[proto/*.proto] -->|Define IPC Contracts| BR[build.rs]
-        BR -->|Prost / Tonic Compiler| Native[Generated Rust Types & gRPC Stubs]
-    end
+- Master gRPC para heartbeat, fila e despacho de tarefas.
+- Worker gRPC para execução remota com streaming de saída.
+- Client CLI para injeção manual de tarefas.
+- Aether Console em `http://IP_DO_MASTER:8080`.
+- `--worker-id` explícito.
+- `--worker-port` explícito.
+- Política de allowlist/denylist de comandos.
+- Bloqueio de execução como root por padrão no Worker.
+- Scheduler baseado em CPU livre, RAM livre, temperatura e slots.
+- Tags de Workers para roteamento de tarefas.
+- Suporte inicial a Linux, WSL2 e Windows nativo via PowerShell.
+- Logs estruturados com `tracing`.
 
-    subgraph "Runtime (Aether Nodes Topology)"
-        Master[Aether Master Node] <-->|gRPC Bidirectional Streams / HTTP/2| Worker1[Worker Node 01]
-        Master <-->|gRPC Bidirectional Streams / HTTP/2| Worker2[Worker Node 02]
-    end
+---
 
-    Native -.->|Injected into| Master
-    Native -.->|Injected into| Worker1
-    Native -.->|Injected into| Worker2
+## Stack técnica
 
-Architectural Decisions & Technical Trade-offs
+- Rust stable
+- Tokio
+- Tonic gRPC
+- Prost/Protocol Buffers
+- Axum para Aether Console
+- Sysinfo para telemetria
+- Clap para CLI
+- Serde/TOML/JSON para configuração e API
 
-    Zero-Copy Serialization: Utilização de buffers eficientes para minimizar a alocação dinâmica e cópia de memória durante a serialização/desserialização de payloads grandes na rede.
+---
 
-    Asynchronous I/O Multiplexing: Construído sobre o ecossistema assíncrono tokio, utilizando epoll nativo do Linux no backend para gerenciar milhares de conexões simultâneas e concorrência orientada a eventos sem travamento de threads (Non-blocking I/O).
+## Instalação no Ubuntu Server
 
-    HTTP/2 Bidirectional Streaming: Permite que o Master e os Workers enviem mensagens de controle e telemetria de forma concorrente sobre a mesma conexão TCP fixa, reduzindo drasticamente o overhead de handshake.
+```bash
+sudo apt update
+sudo apt install -y git curl ca-certificates build-essential pkg-config protobuf-compiler
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+rustup update stable
+```
 
-Technology Stack & Requirements
-
-    Core Language: Rust Core v1.95.0+ (Stable Toolchain)
-
-    Transport & RPC Layer: gRPC / HTTP/2
-
-    Data Serialization: Protocol Buffers v3
-
-    Runtime Assíncrono: Tokio (Multi-threaded scheduler)
-
-Repository Topology
-
-    proto/ - Definições de IDL contendo as estruturas das mensagens de rede (Payloads) e assinaturas dos serviços do cluster.
-
-    src/ - Implementação do motor distribuído (gerenciamento de estado, nós de processamento e lógica de rede).
-
-    build.rs - Script de meta-programação responsável por garantir a compilação determinística do Protobuf antes do build do binário principal.
-
-    Cargo.toml - Manifesto de dependências do ecossistema Rust e configurações finas de perfis de otimização (release).
-
-Bootstrap & Compilação
-1. Dependências do Sistema (Arch Linux)
-
-O compilador de protocolo (protoc) é obrigatório para traduzir os arquivos IDL do gRPC:
-Bash
-
-sudo pacman -S protobuf rustup
-
-2. Pipeline de Build Otimizado
-
-Para compilar o binário com todas as otimizações de loop, inline de funções e remoção de símbolos de debug ativos:
-Bash
-
+```bash
+git clone https://github.com/CFSJCODE/Cluster-Aether.git
+cd Cluster-Aether
 cargo build --release
+```
 
-Roadmap de Engenharia (Observabilidade & Baixo Nível)
+---
 
-    [ ] Implementar Telemetria Distribuída e métricas expostas via Prometheus.
+## Execução local
 
-    [ ] Integração de Rede Avançada: Acoplar o processamento do cluster com filtros de pacotes de baixo nível via eBPF/XDP (módulo externo), mitigando ataques de rede direto na camada de driver antes de subir para o Userspace.
-    EOF
+### Master com Aether Console
+
+```bash
+./target/release/aether --mode master --port 50051 --web-port 8080
+```
+
+Acesse:
+
+```text
+http://127.0.0.1:8080
+```
+
+### Worker local
+
+```bash
+./target/release/aether \
+  --mode worker \
+  --worker-id ryzen-local \
+  --master-ip 127.0.0.1 \
+  --port 50051 \
+  --worker-port 50052 \
+  --max-concurrent-tasks 4 \
+  --tags local,ryzen,high-performance,linux
+```
+
+### Client CLI
+
+```bash
+./target/release/aether \
+  --mode client \
+  --master-ip 127.0.0.1 \
+  --port 50051 \
+  --command "hostname && uptime"
+```
+
+---
+
+## Topologia recomendada para laboratório
+
+```text
+Ryzen 5 4600G + Ubuntu Server
+├── Master        :50051
+├── Aether Console:8080
+└── Worker local  :50052, CPUQuota 650% via systemd
+
+HP Z230 + Windows/WSL2
+└── Worker remoto :50052
+
+Samsung Essentials E34 + Windows/WSL2
+└── Worker remoto :50052
+```
+
+---
+
+## Segurança operacional
+
+O Worker executa comandos recebidos pela rede. Portanto:
+
+- não exponha as portas do cluster à Internet;
+- execute somente em LAN, VPN ou laboratório isolado;
+- use firewall por IP;
+- não execute o Worker como root;
+- mantenha `allow_unsafe_commands = false`;
+- adicione autenticação/mTLS antes de qualquer uso produtivo.
+
+---
+
+## Serviços systemd
+
+Exemplos estão em:
+
+```text
+deploy/systemd/aether-master.service
+deploy/systemd/aether-worker-local.service
+```
+
+Instalação sugerida:
+
+```bash
+sudo useradd --system --home /opt/aether --shell /usr/sbin/nologin aether
+sudo mkdir -p /opt/aether/bin
+sudo cp ./target/release/aether /opt/aether/bin/aether
+sudo cp deploy/systemd/aether-master.service /etc/systemd/system/
+sudo cp deploy/systemd/aether-worker-local.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now aether-master
+sudo systemctl enable --now aether-worker-local
+```
+
+---
+
+## Roadmap
+
+O plano de evolução por fases está documentado em [`docs/ROADMAP.md`](docs/ROADMAP.md).
