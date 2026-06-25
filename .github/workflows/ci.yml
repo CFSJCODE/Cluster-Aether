@@ -1,0 +1,21 @@
+name: Rust CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo test
+        run: cargo test --all
+      - name: cargo check release
+        run: cargo check --release
